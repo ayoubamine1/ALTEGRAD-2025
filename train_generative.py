@@ -24,7 +24,7 @@ TRAIN_GRAPHS = "data/train_graphs.pkl"
 VAL_GRAPHS = "data/validation_graphs.pkl"
 
 DEFAULT_CONFIG = {
-    "lm_name": "t5-small",
+    "lm_name": "laituan245/molt5-small",  # Chemistry-focused T5
     "batch_size": 16,
     "epochs": 15,
     "lr": 5e-4,

@@ -25,7 +25,7 @@ class MolecularCaptionDataset(Dataset):
     def __init__(
         self,
         graph_path: str,
-        tokenizer_name: str = "t5-small",
+        tokenizer_name: str = "laituan245/molt5-small",
         max_length: int = 256,
         is_test: bool = False
     ):

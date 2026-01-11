@@ -24,7 +24,7 @@ class MolecularCaptioner(nn.Module):
     
     def __init__(
         self,
-        lm_name: str = "t5-small",
+        lm_name: str = "laituan245/molt5-small",  # Chemistry-focused T5
         graph_hidden_dim: int = 256,
         graph_out_dim: int = 512,
         num_gnn_layers: int = 4,

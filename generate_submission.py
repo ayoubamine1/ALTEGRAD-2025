@@ -118,7 +118,7 @@ if __name__ == "__main__":
     
     parser.add_argument("--checkpoint", type=str, required=True, help="Model checkpoint")
     parser.add_argument("--output", type=str, default="submission.csv", help="Output CSV path")
-    parser.add_argument("--lm_name", type=str, default="t5-small")
+    parser.add_argument("--lm_name", type=str, default="laituan245/molt5-small")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_length", type=int, default=256)
     parser.add_argument("--num_beams", type=int, default=5)
