@@ -22,8 +22,8 @@ except ImportError:
     HAS_BERTSCORE = False
     print("Warning: bert-score not installed. Run: pip install bert-score")
 
-from dataset import MolecularCaptionDataset, collate_fn_generative
-from model import create_model
+from app.dataset import MolecularCaptionDataset, collate_fn_generative
+from app.model import create_model
 
 
 def compute_bleu4(predictions: List[str], references: List[str]) -> Dict[str, float]:
@@ -148,9 +148,9 @@ def main(args):
     print(f"Loading {args.split} set...")
     
     if args.split == "validation":
-        graph_path = "data/validation_graphs.pkl"
+        graph_path = f"{args.data_dir}/validation_graphs.pkl"
     else:
-        graph_path = f"data/{args.split}_graphs.pkl"
+        graph_path = f"{args.data_dir}/{args.split}_graphs.pkl"
     
     dataset = MolecularCaptionDataset(
         graph_path,
@@ -177,7 +177,10 @@ def main(args):
     model = create_model(
         lm_name=args.lm_name,
         freeze_lm=False,
-        gradient_checkpointing=False
+        gradient_checkpointing=False,
+        use_lora=args.use_lora,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha
     )
     
     checkpoint = torch.load(args.checkpoint, map_location=device)
@@ -237,7 +240,8 @@ if __name__ == "__main__":
     
     parser.add_argument("--checkpoint", type=str, required=True, help="Model checkpoint path")
     parser.add_argument("--split", type=str, default="validation", choices=["validation", "train"])
-    parser.add_argument("--lm_name", type=str, default="laituan245/molt5-small")
+    parser.add_argument("--data_dir", type=str, default="data", help="Path to data folder")
+    parser.add_argument("--lm_name", type=str, default="t5-base")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--max_length", type=int, default=256)
     parser.add_argument("--num_beams", type=int, default=5)
@@ -245,6 +249,11 @@ if __name__ == "__main__":
     parser.add_argument("--no_repeat_ngram_size", type=int, default=3)
     parser.add_argument("--subset", type=int, default=None)
     parser.add_argument("--output", type=str, default=None, help="Output CSV path")
+    
+    # LoRA arguments
+    parser.add_argument("--use_lora", action="store_true", help="Use LoRA model")
+    parser.add_argument("--lora_r", type=int, default=16, help="LoRA rank")
+    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
     
     args = parser.parse_args()
     main(args)

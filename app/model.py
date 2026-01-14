@@ -3,6 +3,7 @@ Complete Molecular Captioner model combining:
 - EdgeAwareGIN graph encoder
 - GraphToTextBridge projector  
 - T5 decoder for text generation
+- Optional LoRA for efficient fine-tuning
 """
 import torch
 import torch.nn as nn
@@ -10,8 +11,16 @@ from torch_geometric.data import Batch
 from transformers import T5ForConditionalGeneration, T5Config
 from transformers.modeling_outputs import BaseModelOutput
 
-from graph_encoder import EdgeAwareGIN
-from bridge import GraphToTextBridge, SimpleBridge
+# LoRA support (optional)
+try:
+    from peft import LoraConfig, get_peft_model, TaskType
+    HAS_PEFT = True
+except ImportError:
+    HAS_PEFT = False
+    print("Warning: peft not installed. LoRA not available. Run: pip install peft")
+
+from app.graph_encoder import EdgeAwareGIN
+from app.bridge import GraphToTextBridge, SimpleBridge
 
 
 class MolecularCaptioner(nn.Module):
@@ -24,14 +33,18 @@ class MolecularCaptioner(nn.Module):
     
     def __init__(
         self,
-        lm_name: str = "laituan245/molt5-small",  # Chemistry-focused T5
+        lm_name: str = "t5-base",
         graph_hidden_dim: int = 256,
         graph_out_dim: int = 512,
         num_gnn_layers: int = 4,
         num_query_tokens: int = 32,
         use_simple_bridge: bool = False,
         freeze_lm: bool = True,
-        gradient_checkpointing: bool = True
+        gradient_checkpointing: bool = True,
+        use_lora: bool = False,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1
     ):
         """
         Args:
@@ -46,16 +59,36 @@ class MolecularCaptioner(nn.Module):
         """
         super().__init__()
         
-        # Load T5 configuration to get dimensions
+        self.use_lora = use_lora
+        self.freeze_lm = freeze_lm
+        
+        # Load T5 model
         self.lm = T5ForConditionalGeneration.from_pretrained(lm_name)
-        lm_dim = self.lm.config.d_model  # 512 for t5-small
+        lm_dim = self.lm.config.d_model  # 512 for t5-small, 768 for t5-base
         
         # Enable gradient checkpointing for memory efficiency
         if gradient_checkpointing:
             self.lm.gradient_checkpointing_enable()
         
-        # Freeze LM if specified (unfreeze later for fine-tuning)
-        if freeze_lm:
+        # Apply LoRA if requested
+        if use_lora:
+            if not HAS_PEFT:
+                raise ImportError("peft library required for LoRA. Run: pip install peft")
+            
+            lora_config = LoraConfig(
+                task_type=TaskType.SEQ_2_SEQ_LM,
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                target_modules=["q", "v"],  # Query and Value projections
+                # For full adaptation: ["q", "k", "v", "o", "wi", "wo"]
+            )
+            self.lm = get_peft_model(self.lm, lora_config)
+            print(f"  LoRA applied: r={lora_r}, alpha={lora_alpha}")
+            self.lm.print_trainable_parameters()
+        
+        # Freeze LM if specified (and not using LoRA)
+        elif freeze_lm:
             for param in self.lm.parameters():
                 param.requires_grad = False
         
@@ -84,7 +117,6 @@ class MolecularCaptioner(nn.Module):
         
         self.num_query_tokens = num_query_tokens
         self.lm_dim = lm_dim
-        self.freeze_lm = freeze_lm
         
     def unfreeze_lm(self, unfreeze_layers: int = -1):
         """
@@ -228,30 +260,46 @@ class MolecularCaptioner(nn.Module):
 
 
 def create_model(
-    lm_name: str = "t5-small",
+    lm_name: str = "t5-base",
     freeze_lm: bool = True,
     use_simple_bridge: bool = False,
-    gradient_checkpointing: bool = True
+    gradient_checkpointing: bool = True,
+    use_lora: bool = False,
+    lora_r: int = 16,
+    lora_alpha: int = 32
 ) -> MolecularCaptioner:
     """
     Factory function to create model with good defaults.
+    
+    Args:
+        lm_name: HuggingFace model name
+        freeze_lm: Freeze LM (ignored if use_lora=True)
+        use_lora: Use LoRA for efficient fine-tuning
+        lora_r: LoRA rank
+        lora_alpha: LoRA alpha scaling
     """
     model = MolecularCaptioner(
         lm_name=lm_name,
         graph_hidden_dim=256,
         graph_out_dim=512,
         num_gnn_layers=4,
-        num_query_tokens=8,
+        num_query_tokens=32,
         use_simple_bridge=use_simple_bridge,
         freeze_lm=freeze_lm,
-        gradient_checkpointing=gradient_checkpointing
+        gradient_checkpointing=gradient_checkpointing,
+        use_lora=use_lora,
+        lora_r=lora_r,
+        lora_alpha=lora_alpha
     )
     
     trainable, total = model.count_parameters()
     print(f"Model created: {lm_name}")
     print(f"  Total parameters: {total:,}")
     print(f"  Trainable parameters: {trainable:,}")
-    print(f"  LM frozen: {freeze_lm}")
+    if use_lora:
+        print(f"  Using LoRA (r={lora_r}, alpha={lora_alpha})")
+    else:
+        print(f"  LM frozen: {freeze_lm}")
     
     return model
 

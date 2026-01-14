@@ -13,28 +13,29 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 
-from dataset import MolecularCaptionDataset, collate_fn_generative
-from model import create_model, MolecularCaptioner
+from app.dataset import MolecularCaptionDataset, collate_fn_generative
+from app.model import create_model, MolecularCaptioner
 
 
 # =========================================================
 # CONFIG
 # =========================================================
-TRAIN_GRAPHS = "data/train_graphs.pkl"
-VAL_GRAPHS = "data/validation_graphs.pkl"
 
 DEFAULT_CONFIG = {
-    "lm_name": "laituan245/molt5-small",  # Chemistry-focused T5
+    "lm_name": "t5-base",
     "batch_size": 16,
     "epochs": 15,
-    "lr": 5e-4,
+    "lr": 3e-4,
     "weight_decay": 0.01,
     "warmup_steps": 500,
     "max_length": 256,
-    "freeze_lm_epochs": 5,  # Freeze LM for first N epochs
+    "freeze_lm_epochs": 5,  # Freeze LM for first N epochs (ignored if use_lora)
     "gradient_accumulation": 2,
     "save_every": 3,
     "eval_every": 1,
+    "use_lora": False,
+    "lora_r": 16,
+    "lora_alpha": 32,
 }
 
 
@@ -125,7 +126,11 @@ def load_checkpoint(model, optimizer, path, device):
     checkpoint = torch.load(path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     if optimizer is not None:
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        try:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        except ValueError as e:
+            print(f"Warning: Could not load optimizer state (param count mismatch). Starting fresh optimizer.")
+            print(f"  This is normal when resuming after LM unfreezing.")
     return checkpoint["epoch"], checkpoint["loss"]
 
 
@@ -141,15 +146,19 @@ def main(args):
     print("Loading datasets...")
     print("="*60)
     
+    # Build data paths
+    train_path = f"{args.data_dir}/train_graphs.pkl"
+    val_path = f"{args.data_dir}/validation_graphs.pkl"
+    
     train_ds = MolecularCaptionDataset(
-        TRAIN_GRAPHS,
+        train_path,
         tokenizer_name=args.lm_name,
         max_length=args.max_length,
         is_test=False
     )
     
     val_ds = MolecularCaptionDataset(
-        VAL_GRAPHS,
+        val_path,
         tokenizer_name=args.lm_name,
         max_length=args.max_length,
         is_test=False
@@ -192,9 +201,12 @@ def main(args):
     
     model = create_model(
         lm_name=args.lm_name,
-        freeze_lm=True,  # Start with frozen LM
+        freeze_lm=not args.use_lora,  # Don't freeze if using LoRA
         use_simple_bridge=args.simple_bridge,
-        gradient_checkpointing=True
+        gradient_checkpointing=True,
+        use_lora=args.use_lora,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha
     )
     model = model.to(device)
     
@@ -226,8 +238,8 @@ def main(args):
         print(f"\nEpoch {epoch + 1}/{args.epochs}")
         print("-" * 40)
         
-        # Unfreeze LM after warmup epochs
-        if epoch == args.freeze_lm_epochs and args.freeze_lm_epochs > 0:
+        # Unfreeze LM after warmup epochs (only if not using LoRA)
+        if not args.use_lora and epoch == args.freeze_lm_epochs and args.freeze_lm_epochs > 0:
             print("Unfreezing LM decoder layers...")
             model.unfreeze_lm(unfreeze_layers=4)  # Last 4 layers
             
@@ -283,6 +295,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train molecular captioner")
     
+    parser.add_argument("--data_dir", type=str, default="data", help="Path to data folder")
     parser.add_argument("--lm_name", type=str, default=DEFAULT_CONFIG["lm_name"])
     parser.add_argument("--batch_size", type=int, default=DEFAULT_CONFIG["batch_size"])
     parser.add_argument("--epochs", type=int, default=DEFAULT_CONFIG["epochs"])
@@ -296,6 +309,11 @@ if __name__ == "__main__":
     parser.add_argument("--subset", type=int, default=None, help="Use subset for testing")
     parser.add_argument("--resume", type=str, default=None, help="Resume from checkpoint")
     parser.add_argument("--simple_bridge", action="store_true", help="Use simple bridge")
+    
+    # LoRA arguments
+    parser.add_argument("--use_lora", action="store_true", help="Use LoRA for efficient fine-tuning")
+    parser.add_argument("--lora_r", type=int, default=DEFAULT_CONFIG["lora_r"], help="LoRA rank")
+    parser.add_argument("--lora_alpha", type=int, default=DEFAULT_CONFIG["lora_alpha"], help="LoRA alpha")
     
     args = parser.parse_args()
     main(args)
