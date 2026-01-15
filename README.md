@@ -1,6 +1,6 @@
 # Molecular Graph Captioning
 # *Better Retrieval*
-The 'enhanced_baseline' folder mirrors the baseline pipeline (`data_baseline/`) but swaps in a stronger graph encoder and a contrastive loss. Key upgrades:
+The `enhanced_baseline` folder mirrors the baseline pipeline (`data_baseline/`) but swaps in a stronger graph encoder and a contrastive loss. Key upgrades:
 - Atom and bond features
 - GINE-based encoder
 - Contrastive (InfoNCE) loss
