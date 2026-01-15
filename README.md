@@ -94,6 +94,24 @@ python -m app.generate_submission_hybrid \
     --threshold 0.90
 ```
 
+### RLHF
+
+```bash
+# Generate data for DPO
+python -m app.rl_data_gen \
+    --checkpoint checkpoints/best_model.pt \
+    --lm_name t5-base \
+    --data_dir data
+
+# Train with DPO
+python -m app.train_dpo \
+    --checkpoint checkpoints/best_model.pt \
+    --lm_name t5-base \
+    --data_dir data
+    --rl_data_csv ./rl_dataset_full.csv
+    --lr 1e-6 # Should be low
+```
+
 ## Project Structure
 
 ```
@@ -106,7 +124,9 @@ app/
 ├── evaluate.py           # Evaluation (BLEU-4, BERTScore)
 ├── evaluate_hybrid.py    # Hybrid evaluation
 ├── generate_submission.py        # Pure generation submission
-└── generate_submission_hybrid.py # Hybrid submission
+├── generate_submission_hybrid.py # Hybrid submission
+├── train_dpo.py          # post training with DPO
+└── rl_data_gen.py        # Generate data for DPO 
 ```
 
 ## Key Arguments
