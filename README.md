@@ -1,4 +1,19 @@
 # Molecular Graph Captioning
+# *Better Retrieval*
+The 'enhanced_baseline' folder mirrors the baseline pipeline (`data_baseline/`) but swaps in a stronger graph encoder and a contrastive loss. Key upgrades:
+- Atom and bond features
+- GINE-based encoder
+- Contrastive (InfoNCE) loss
+- Attention-based graph readout
+- Fine-tunable BERT embeddings
+
+`train_gnn.py` : Training entrypoint. Loads data, instantiates the improved encoder, trains with the symmetric InfoNCE loss, evaluates on validation, and saves 
+   - `model_checkpoint.pt` - GNN model
+   - `bert_checkpoint.pt` - BERT encoder (if fine-tuning enabled)
+
+`retrieval_answer.py` : Uses the trained encoder to embed the test graphs, does nearest-neighbor search against train description embeddings, and writes `test_retrieved_descriptions.csv`. |
+
+# *Generative Approach*
 
 Generative model for generating natural language descriptions from molecular graphs. Uses a Graph Neural Network encoder with a T5 decoder, supporting LoRA for efficient fine-tuning.
 
