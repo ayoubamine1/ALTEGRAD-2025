@@ -15,7 +15,7 @@ The `enhanced_baseline` folder mirrors the baseline pipeline (`data_baseline/`) 
 
 # *Generative Approach*
 
-Generative model for generating natural language descriptions from molecular graphs. Uses a Graph Neural Network encoder with a T5 decoder, supporting LoRA for efficient fine-tuning.
+The `app`folder contains a generative model for generating natural language descriptions from molecular graphs. Uses a Graph Neural Network encoder with a T5 decoder, supporting LoRA for efficient fine-tuning.
 
 ## Architecture
 
